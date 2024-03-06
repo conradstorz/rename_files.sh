@@ -22,33 +22,43 @@
 # You need to have a system with at minimum 8gb of RAM. This will work
 # even on older computers without GPUs; just let it run overnight!
 
+# declare abort command
 abort() {
   printf '%s\n' "renaming terminated." >&2
   exit 1
 }
 
-if ! LLAVA=$(command -v llava-v1.5-7b-q4-main.llamafile); then
-  printf '%s\n' "llava-v1.5-7b-q4-main.llamafile: fatal error: update this script with the path of your llava llamafile" >&2
-  printf '%s\n' "please download https://huggingface.co/jartine/llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-q4-main.llamafile and put it on the system path" >&2
+echo 'Checking existance and availability of LLAVA...'
+
+if ! LLAVA=$(command -v llava-v1.5-7b-q4.llamafile); then
+  printf '%s\n' "llava-v1.5-7b-q4.llamafile: fatal error: update this script with the path of your llava llamafile" >&2
+  printf '%s\n' "please download https://huggingface.co/jartine/llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-q4.llamafile and put it on the system path" >&2
   abort
 fi
 
-if ! MISTRAL=$(command -v mistral-7b-instruct-v0.1-Q4_K_M-main.llamafile); then
-  printf '%s\n' "mistral-7b-instruct-v0.1-Q4_K_M-main.llamafile: fatal error: update this script with the path of your mistral llamafile" >&2
-  printf '%s\n' "please download https://huggingface.co/jartine/mistral-7b.llamafile/resolve/main/mistral-7b-instruct-v0.1-Q4_K_M-main.llamafile and put it on the system path" >&2
+
+echo 'Checking existance and availability of MISTRAL...'
+
+if ! MISTRAL=$(command -v mistral-7b-instruct-v0.1-Q4_K_M.llamafile); then
+  printf '%s\n' "mistral-7b-instruct-v0.1-Q4_K_M.llamafile: fatal error: update this script with the path of your mistral llamafile" >&2
+  printf '%s\n' "please download https://huggingface.co/jartine/mistral-7b.llamafile/resolve/main/mistral-7b-instruct-v0.1-Q4_K_M.llamafile and put it on the system path" >&2
   abort
 fi
+
+echo 'Checking existance and availability of CONVERT...'
 
 if ! CONVERT=$(command -v convert); then
   printf '%s\n' "${0##*/}: warning: convert command not found (please install imagemagick so we can analyze image formats like webp)" >&2
 fi
 
+# define "isgood" function. This function calls MISTRAL and asks if the argument passed is an english word or sentance.
 isgood() {
+  printf '%s\n' "Asking $MISTRAL about '${1##*/}' file..." >&2
   "$MISTRAL" \
       --temp 0 -ngl 35 \
       --grammar 'root ::= "yes" | "no"' \
       -p "[INST]Does the filename '${1##*/}' look like readable english text?[/INST]" \
-      --silent-prompt 2>/dev/null
+      --silent-prompt
 }
 
 pickname() {
@@ -67,34 +77,49 @@ shuf() {
     cut -d ' ' -f2-
 }
 
+echo 'Script starting...'
+
+echo 'Checking argument presented is valid...'
 
 if [ $# -eq 0 ]; then
   printf '%s\n' "${0##*/}: fatal error: missing operand" >&2
   abort
 fi
 
+echo 'Argument looks good.'
+
+echo 'Are we being asked for help?'
+
 if [ x"$1" = x"--help" ]; then
   printf '%s\n' "usage: ${0##*/} PATH..."
   exit
 fi
 
+echo 'Backup the IFS variable: '$IFS
+
 OIFS=$IFS
 IFS='
 '
+
+echo 'Begin looping over the arguments'
+
 for arg; do
 
-  # ensure argument is a file or directory
+  echo 'Ensure argument is a file or directory... '$arg
+
   if [ ! -e "$arg" ]; then
     printf '%s\n' "$arg: fatal error: file not found" >&2
     abort
   fi
 
-  # find all regular files under path argument
+  echo 'Find all regular files under path argument'
+  
   for path in $(find "$arg" -type f -print0 | tr '\0' '\n' | shuf); do
 
-    # ask mistral if filename needs renaming
+    echo 'Ask mistral if filename needs renaming? '$path
+
     if ! answer=$(isgood "$path"); then
-      printf '%s\n' "$path: fatal error: failed to ask mistral if file needs renaming" >&2
+      printf '%s\n' "$path: fatal error: mistral failed to say if file needs renaming" >&2
       abort
     fi
 
